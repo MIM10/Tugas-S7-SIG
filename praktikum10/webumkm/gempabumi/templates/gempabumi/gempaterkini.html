@@ -1,0 +1,422 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gempa Terkini - BMKG</title>
+
+    <!-- Leaflet CSS -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+
+        .header {
+            background: #075080;
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header h1 {
+            font-size: 23px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: #dbeafe;
+        }
+
+        .refresh-btn {
+            border: none;
+            background: white;
+            color: #123047;
+            padding: 11px 18px;
+            border-radius: 7px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .refresh-btn:hover {
+            background: #e2e8f0;
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 85px);
+            min-height: 500px;
+        }
+
+        .sidebar {
+            width: 310px;
+            min-width: 280px;
+            background: white;
+            overflow-y: auto;
+            border-right: 1px solid #ddd;
+        }
+
+        .gempa-item {
+            padding: 13px;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .gempa-item:hover {
+            background: #eff6ff;
+        }
+
+        .gempa-item.active {
+            background: #dbeafe;
+        }
+
+        .magnitude {
+            display: inline-block;
+            min-width: 43px;
+            text-align: center;
+            color: white;
+            padding: 5px 7px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-right: 7px;
+        }
+
+        .lokasi {
+            display: inline;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .wilayah {
+            margin-top: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            line-height: 1.4;
+        }
+
+        .detail {
+            margin-top: 7px;
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .legend {
+            position: absolute;
+            z-index: 1000;
+            bottom: 25px;
+            right: 15px;
+            background: white;
+            padding: 13px;
+            border-radius: 9px;
+            box-shadow: 0 2px 10px #0002;
+            font-size: 13px;
+            line-height: 1.8;
+        }
+
+        .legend h3 {
+            font-size: 15px;
+            margin-bottom: 5px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .dot {
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .error {
+            padding: 15px;
+            color: #b91c1c;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .empty {
+            padding: 20px;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        @media (max-width: 700px) {
+            .header {
+                padding: 13px;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .header p {
+                font-size: 12px;
+            }
+
+            .refresh-btn {
+                padding: 9px 12px;
+                font-size: 12px;
+            }
+
+            .container {
+                height: auto;
+                min-height: 0;
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                min-width: 0;
+                max-height: 300px;
+                order: 2;
+            }
+
+            .map-container {
+                height: 55vh;
+                min-height: 350px;
+                order: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header class="header">
+        <div>
+            <h1>15 Gempa Terkini (M 5.0+)</h1>
+            <p>
+                {{ jumlah_gempa }} gempa M 5.0+ terakhir
+                · Data BMKG
+            </p>
+        </div>
+
+        <button class="refresh-btn" onclick="location.reload()">
+            Muat ulang
+        </button>
+    </header>
+
+    <main class="container">
+
+        <!-- Daftar Gempa -->
+        <aside class="sidebar">
+
+            {% if pesan_error %}
+                <div class="error">{{ pesan_error }}</div>
+            {% endif %}
+
+            {% if daftar_gempa %}
+                {% for gempa in daftar_gempa %}
+                    <div
+                        class="gempa-item"
+                        id="gempa-{{ forloop.counter0 }}"
+                        data-index="{{ forloop.counter0 }}"
+                        onclick="pilihGempa(this.dataset.index)"
+                    >
+                        <span class="magnitude" style="background: {{ gempa.warna }};">
+                            {{ gempa.Magnitude }}
+                        </span>
+
+                        <span class="lokasi">
+                            {{ gempa.Wilayah|default:"Gempa bumi" }}
+                        </span>
+
+                        <!-- <div class="wilayah">
+                            {{ gempa.Wilayah }}
+                        </div> -->
+
+                        <div class="detail">
+                            {{ forloop.counter }}.
+                            {{ gempa.Tanggal }} {{ gempa.Jam }}
+                            · {{ gempa.Kedalaman }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                {% if not pesan_error %}
+                    <div class="empty">
+                        Belum ada data gempa yang dapat ditampilkan.
+                    </div>
+                {% endif %}
+            {% endif %}
+
+        </aside>
+
+        <!-- Peta -->
+        <section class="map-container">
+            <div id="map"></div>
+
+            <div class="legend">
+                <h3>Kedalaman</h3>
+
+                <div class="legend-item">
+                    <span class="dot" style="background:#dc2626"></span>
+                    Dangkal (&lt; 70 km)
+                </div>
+
+                <div class="legend-item">
+                    <span class="dot" style="background:#f59e0b"></span>
+                    Menengah (70-300 km)
+                </div>
+
+                <div class="legend-item">
+                    <span class="dot" style="background:#16a34a"></span>
+                    Dalam (&gt; 300 km)
+                </div>
+
+                <small>Ukuran lingkaran = magnitude</small>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Data Django ke JavaScript -->
+    {{ daftar_gempa|json_script:"data-gempa" }}
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Membaca data gempa dari Django
+        const daftarGempa = JSON.parse(
+            document.getElementById("data-gempa").textContent
+        );
+
+        // Membuat peta Indonesia
+        const map = L.map("map").setView([-2.5, 118], 5);
+
+        // Menambahkan OpenStreetMap
+        L.tileLayer(
+            "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+            {
+                attribution:
+                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }
+        ).addTo(map);
+
+        // Menyimpan marker
+        const markers = [];
+
+        // Menentukan warna berdasarkan kedalaman
+        function warnaKedalaman(kedalaman) {
+            if (kedalaman < 70) {
+                return "#dc2626";
+            } else if (kedalaman <= 300) {
+                return "#f59e0b";
+            } else {
+                return "#16a34a";
+            }
+        }
+
+        // Membuat marker untuk setiap gempa
+        daftarGempa.forEach((gempa, index) => {
+
+            if (gempa.lat === null || gempa.lon === null) {
+                return;
+            }
+
+            const warna = warnaKedalaman(
+                gempa.kedalaman_angka
+            );
+
+            // Ukuran marker berdasarkan magnitude
+            const radius = Math.max(
+                7,
+                Math.min(18, gempa.magnitude * 2.2)
+            );
+
+            const marker = L.circleMarker(
+                [gempa.lat, gempa.lon],
+                {
+                    radius: radius,
+                    color: "#333",
+                    weight: 1,
+                    fillColor: warna,
+                    fillOpacity: 0.8
+                }
+            ).addTo(map);
+
+            // Informasi ketika marker diklik
+            marker.bindPopup(`
+                <b>Gempa ${gempa.Magnitude} M</b><br>
+                <b>Wilayah:</b> ${gempa.Wilayah}<br>
+                <b>Tanggal:</b> ${gempa.Tanggal}<br>
+                <b>Jam:</b> ${gempa.Jam}<br>
+                <b>Kedalaman:</b> ${gempa.Kedalaman}<br>
+                <b>Koordinat:</b> ${gempa.Coordinates}
+            `);
+
+            markers[index] = marker;
+        });
+
+        // Memilih gempa dari daftar sebelah kiri
+        function pilihGempa(index) {
+
+            const gempa = daftarGempa[index];
+
+            if (gempa.lat === null || gempa.lon === null) {
+                return;
+            }
+
+            // Menghapus status aktif sebelumnya
+            document.querySelectorAll(".gempa-item")
+                .forEach(item => item.classList.remove("active"));
+
+            // Memberi tanda pada data yang dipilih
+            const item = document.getElementById("gempa-" + index);
+
+            if (item) {
+                item.classList.add("active");
+            }
+
+            // Mengarahkan peta ke lokasi gempa
+            map.flyTo(
+                [gempa.lat, gempa.lon],
+                7,
+                { duration: 1 }
+            );
+
+            // Membuka popup marker
+            if (markers[index]) {
+                markers[index].openPopup();
+            }
+        }
+    </script>
+
+</body>
+</html>

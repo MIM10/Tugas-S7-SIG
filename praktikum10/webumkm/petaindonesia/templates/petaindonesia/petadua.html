@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peta Jabodetabek</title>
+
+    <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        header {
+            padding: 12px 24px;
+            background: #07558b;
+            color: white;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        #map {
+            height: calc(100vh - 52px);
+            width: 100%;
+        }
+
+        /* Panel pilihan kota */
+        .city-panel {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            width: 185px;
+        }
+
+        .city-panel h3 {
+            margin: 0 0 10px;
+            font-size: 18px;
+        }
+
+        .city-panel button {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background: #f5f5f5;
+            font-size: 15px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .city-panel button:hover {
+            background: #dceeff;
+        }
+
+        .city-panel button:last-child {
+            text-align: center;
+            font-weight: bold;
+            background: #e5e5e5;
+        }
+
+        .city-panel button:last-child:hover {
+            background: #cce3f8;
+        }
+
+        /* Label marker */
+        .city-label {
+            font-weight: bold;
+            font-size: 14px;
+        }
+    </style>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<body>
+
+    <header>
+        <h1>Peta Jabodetabek: Jakarta, Bogor, Depok, Tangerang, Bekasi</h1>
+    </header>
+
+    <div id="map"></div>
+
+    <script>
+
+        // 1. Inisialisasi peta
+        const map = L.map("map", {
+            minZoom: 9,
+            maxZoom: 18
+        }).fitBounds([
+            [-6.85, 106.45],
+            [-5.95, 107.15]
+        ]);
+
+        // 2. Basemap OpenStreetMap
+        const osm = L.tileLayer(
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }
+        ).addTo(map);
+
+        // 3. Basemap citra satelit
+        const satelit = L.tileLayer(
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            {
+                maxZoom: 19,
+                attribution: "Tiles &copy; Esri"
+            }
+        );
+
+        // 4. Data koordinat kota Jabodetabek
+        const kota = [
+            {
+                nama: "Jakarta",
+                koordinat: [-6.2088, 106.8456]
+            },
+            {
+                nama: "Bogor",
+                koordinat: [-6.5971, 106.8060]
+            },
+            {
+                nama: "Depok",
+                koordinat: [-6.4025, 106.7942]
+            },
+            {
+                nama: "Tangerang",
+                koordinat: [-6.1783, 106.6319]
+            },
+            {
+                nama: "Bekasi",
+                koordinat: [-6.2383, 106.9756]
+            }
+        ];
+
+        // 5. Membuat marker untuk setiap kota
+        const markers = {};
+
+        kota.forEach(function(item) {
+
+            const marker = L.marker(item.koordinat)
+                .bindTooltip(item.nama, {
+                    permanent: true,
+                    direction: "right",
+                    className: "city-label"
+                })
+                .bindPopup(
+                    "<b>" + item.nama + "</b><br>Wilayah Jabodetabek"
+                );
+
+            markers[item.nama] = marker;
+
+            marker.addTo(map);
+
+        });
+
+        // 6. Kontrol pilihan basemap
+        L.control.layers(
+            {
+                "OpenStreetMap": osm,
+                "Citra Satelit": satelit
+            },
+            {
+                "Marker Kota": L.layerGroup(
+                    Object.values(markers)
+                )
+            },
+            {
+                position: "topright"
+            }
+        ).addTo(map);
+
+        // 7. Membuat panel pilihan kota
+        const CityControl = L.Control.extend({
+
+            options: {
+                position: "topright"
+            },
+
+            onAdd: function(map) {
+
+                const container = L.DomUtil.create(
+                    "div",
+                    "city-panel"
+                );
+
+                container.innerHTML = `
+                    <h3>Pilih kota</h3>
+
+                    <button data-city="Jakarta">Jakarta</button>
+                    <button data-city="Bogor">Bogor</button>
+                    <button data-city="Depok">Depok</button>
+                    <button data-city="Tangerang">Tangerang</button>
+                    <button data-city="Bekasi">Bekasi</button>
+
+                    <button data-city="all">
+                        Tampilkan semua
+                    </button>
+                `;
+
+                // Mencegah klik panel menggerakkan peta
+                L.DomEvent.disableClickPropagation(container);
+
+                // Event tombol kota
+                container.querySelectorAll("button").forEach(
+                    function(button) {
+
+                        button.addEventListener("click", function() {
+
+                            const selectedCity = this.dataset.city;
+
+                            if (selectedCity === "all") {
+
+                                tampilkanSemua();
+
+                            } else {
+
+                                tampilkanKota(selectedCity);
+
+                            }
+
+                        });
+
+                    }
+                );
+
+                return container;
+            }
+
+        });
+
+        map.addControl(new CityControl());
+
+        // 8. Fungsi menampilkan satu kota
+        function tampilkanKota(nama) {
+
+            const marker = markers[nama];
+
+            if (marker) {
+
+                map.flyTo(marker.getLatLng(), 13);
+
+                marker.openPopup();
+
+            }
+
+        }
+
+        // 9. Fungsi menampilkan seluruh kota
+        function tampilkanSemua() {
+
+            const semuaKoordinat = kota.map(
+                item => item.koordinat
+            );
+
+            map.flyToBounds(
+                L.latLngBounds(semuaKoordinat),
+                {
+                    padding: [60, 60],
+                    maxZoom: 11
+                }
+            );
+
+            Object.values(markers).forEach(
+                marker => marker.closePopup()
+            );
+
+        }
+
+        // 10. Menampilkan skala peta
+        L.control.scale({
+            imperial: false
+        }).addTo(map);
+
+    </script>
+
+</body>
+</html>
